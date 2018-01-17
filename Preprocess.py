@@ -13,7 +13,9 @@ import seaborn as sns
 import pandas as pd
 import os
     
-os.chdir('/home/aditya/Projects/AKI Alert/Code/first/')
+#os.chdir('/home/aditya/Projects/AKI Alert/Code/first/')
+os.chdir('C:\\Users\\adity\\Projects\\AKI-Alert')
+
 from helper import loadDict, searchName, createDict
     
 def isSkewed(df, vars, significance = 1e-5):
@@ -29,25 +31,31 @@ def logTrans(df, names):
         df.loc[np.isfinite(df[name]),name] =  np.log(df.loc[np.isfinite(df[name]), name].values + 1)
     return df
 
-os.chdir('/home/aditya/Projects/AKI Alert/Data/')
-dataFileName = '3 day outcome all patients.dta'
+#os.chdir('/home/aditya/Projects/AKI Alert/Data/')
+#dataFileName = '3 day outcome all patients.dta'
+dataFileName = 'full dataset two outcomes no predictions.dta'
 
 
 df = pd.read_stata(dataFileName)
-df.index = df['uid_id'].values
+df.index = df['uid_id'].values.astype('int64')
 df['timesec'] = pd.to_numeric(df['timesec'], errors = 'coerce')
 df['assignment'] = 1*(df['assignment'] == 'Alert')
 df = df[df['akinstage'] == 1]
 
 
+## create new input vars
 df['creatchange'] = df['c1value'] - df['c0value']
+df['cdeltapercent'] = df['creatchange']/df['c0value']
 df['cslope'] = df['creatchange']/df['creat0tocreat1time']
 df['cratio'] = df['c1value']/df['c0value']
-baseline = df['c0value']
-df['cdeltapercent'] = df['creatchange']/baseline
-df['creatoutcome7'] = df['lastcreat72']
-df['creatoutcome7percent'] = (df['creatoutcome7'] - df['c1value'])/df['c1value']
-df['Z'] = pd.Series(np.zeros(len(df)), index = df.index)
+
+## create outcome vars
+baseline = df['c1value']
+df['yLast'] = df['lastcreat72']
+df['yLastPer'] = (df['yLast'] - baseline)/baseline
+df['yMax'] = df['maxcreat72']
+df['yMaxPer'] = (df['yMax'] - baseline)/baseline
+#df['Z'] = pd.Series(np.zeros(len(df)), index = df.index)
 #df.loc[df['assignment'] == 1, 'Z'] = df.loc[df['assignment'] == 1, 'creatoutcome7percent']
 #df.loc[df['assignment'] == 0, 'Z'] = -df.loc[df['assignment'] == 0, 'creatoutcome7percent']
 #df.loc[df['creatoutcome7percent'] == 0, 'creatoutcome7percent'] = (df.loc[df['creatoutcome7percent'] == 0, 'c0value'] -   \
@@ -59,7 +67,7 @@ df['cratio1'] = (1-df['icuatalert'])*df['cratio']
 
 
 ## load dictionary, flatten, and remove medications, missing vars, etc...
-varDict = loadDict('multiview alert.csv', df)
+#varDict = loadDict('multiview alert.csv', df)
 
 
 # dont know why i have to do this, but for some reason the uplift package cant find the feature 'assignment' w/o it....
@@ -67,8 +75,8 @@ varDict = loadDict('multiview alert.csv', df)
 df['missing'] = np.sum(np.isfinite(df.loc[:,'a1c':'wbc'].values), axis = 1)
 
 
-df['orders'] = df[varDict['orders']].sum(axis = 1)
-varDict['orders'] = ['missing', 'orders', 'timesec']
+df['orders'] = df.loc[:,'ablationorder':'ventpcorder'].sum(axis = 1)
+#varDict['orders'] = ['missing', 'orders', 'timesec']
 #predictors = [item for sublist in varDict.values() for item in sublist]
 predictors = ['timesec', 'creatchange', 'cdeltapercent', 'cslope', 'cratio', 'c1value', 'c0value', 'age', 'aaorno', 'surgical',
           'malegender', 'mcv', 'bun', 'bilidirect', 'redcelldistribution', 'alkphos', 'hemoglobin', 'orders',
@@ -77,8 +85,9 @@ predictors = ['timesec', 'creatchange', 'cdeltapercent', 'cslope', 'cratio', 'c1
          'chf', 'paralyticcategory', 'antibioticcategory', 'narcoticcategory',
          'basophilpercent', 'basosabs',
          'lymphpercent', 'leukocyteabs', 'neutrophilabs', 'neutrophilpercent', 'monopercent', 'monoabs', 'eosinophilabs',
-         'eospercent', 'cratio0', 'cratio1']
+         'eospercent', 'cratio0', 'cratio1', 'loopcategory', 'acearbcategory', 'hctzcategory']
 
 ## log transform heavily skewed variables
+## do this twice
 varsLogTrans = list(np.array(predictors)[isSkewed(df, predictors)])
 df = logTrans(df, varsLogTrans)
